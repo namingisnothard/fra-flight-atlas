@@ -1,11 +1,13 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { ArrowDownLeft, ArrowUpRight, CalendarDays, ChevronDown, Clock3, ExternalLink, Globe2, Info, MapPin, Plane, Search, X } from 'lucide-react';
 import AtlasMap from './atlas-map';
 import { routes, type Route } from './routes';
 import { flights } from './flights';
 import dataMeta from './flight-data-meta.json';
+import type { AirportFlight } from './airport-planner';
+const AirportPlanner = lazy(() => import('./airport-planner'));
 
 type Direction = 'All' | 'Departures' | 'Arrivals';
 type Region = 'World' | 'Europe';
@@ -51,6 +53,8 @@ function localTime(timezone: string) {
 }
 
 export default function Home() {
+  const [view, setView] = useState<'routes' | 'airport'>('airport');
+  const [airportFlight, setAirportFlight] = useState<AirportFlight | undefined>();
   const [direction, setDirection] = useState<Direction>('All');
   const [selectedDay, setSelectedDay] = useState(dataMeta.selectedDate);
   const [query, setQuery] = useState('');
@@ -95,10 +99,11 @@ export default function Home() {
       <header className="topbar">
         <div className="brand-mark"><Plane size={19} strokeWidth={2.4} /></div>
         <div className="brand-copy"><h1>FRA Flight Atlas</h1><p>A journal of journeys · Frankfurt am Main</p></div>
+        <nav className="atlas-view-switch" aria-label="Atlas view"><button aria-pressed={view === 'routes'} onClick={() => setView('routes')}>Flight routes</button><button aria-pressed={view === 'airport'} onClick={() => setView('airport')}>Airport 3D <span>NEW</span></button></nav>
         <button className="week-pill" onClick={() => setSelectedDay(dataMeta.selectedDate)} title="Return to the latest snapshot date"><span /> <CalendarDays size={14} />{weekLabel}<ChevronDown size={13} /></button>
       </header>
 
-      <section className="workspace">
+      {view === 'airport' ? <Suspense fallback={<div className="airport-loading">Opening your airport atlas…</div>}><AirportPlanner key={airportFlight ? `${airportFlight.number}-${airportFlight.date}` : 'manual'} flight={airportFlight} onBrowseFlights={() => { setView('routes'); setDirection('Departures'); }} /></Suspense> : <section className="workspace">
         <aside className="sidebar">
           <div className="eyebrow">VOL. I · THE FRANKFURT COLLECTION</div>
           <h2>Every journey<br />begins with wonder.</h2>
@@ -179,7 +184,7 @@ export default function Home() {
                   <div className={`direction-icon ${isArrival ? 'inbound' : ''}`}>{isArrival ? <ArrowDownLeft size={14} /> : <ArrowUpRight size={14} />}</div>
                   <time>{isArrival ? flight[4] : flight[3]}</time><div className="flight-main"><strong>{flight[5]}</strong><span>{flight[6]}</span></div>
                   <div className="flight-route"><span>{isArrival ? selected.iata : 'FRA'}<small>{flight[3]}</small></span><i /><Plane size={12} /><i /><span>{isArrival ? 'FRA' : selected.iata}<small>{flight[4]}</small></span></div>
-                  <b className="scheduled">Published</b>
+                  {isArrival ? <b className="scheduled">Published</b> : <button className="plan-flight" onClick={() => { setAirportFlight({ number: flight[5], date: flight[0], departure: flight[3], destination: selected.iata }); setView('airport'); }}>Plan to gate ↗</button>}
                 </article>
               })}
               {!selectedFlights.length && <div className="empty-schedule">No sourced flight found for this route and day.</div>}
@@ -188,7 +193,7 @@ export default function Home() {
 
           <div className="map-footer"><div><span className="legend-dot airport-legend" /> Active airport · click for details</div><p><Clock3 size={11} /> Drag to move · scroll/pinch to zoom · double-click to reset</p></div>
         </div>
-      </section>
+      </section>}
 
       <footer className="source-bar">FlightStats board snapshot · refreshed {refreshedLabel}. Route directory: {dataMeta.routeDirectoryEdition}. All times local; check the live board before travel. <a href="https://www.flightstats.com/v2/flight-tracker/arrivals/FRA" target="_blank" rel="noreferrer">Flight source <ExternalLink size={10} /></a><a href="https://directfromhere.com/airports/fra" target="_blank" rel="noreferrer">Route source <ExternalLink size={10} /></a></footer>
     </main>
